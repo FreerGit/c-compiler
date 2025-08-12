@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.20)
+project(c-compiler LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# ---- Base library ----
+file(GLOB_RECURSE BASE_FILES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/base/*.cpp
+)
+add_library(base STATIC ${BASE_FILES})
+target_include_directories(base PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/base
+)
+
+# ---- Main executable ----
+file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+)
+add_executable(main_exec ${SRC_FILES})
+target_link_libraries(main_exec PRIVATE base)
