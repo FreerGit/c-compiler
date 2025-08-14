@@ -1,47 +1,81 @@
 #include "arena.hpp"
+#include "string_builder.hpp"
+#include <cassert>
 #include <cstdio>
-#include <ostream>
+#include <print>
+#include <string_view>
+#include <vector>
 
-auto a(auto &arena) -> void {
-  ArenaTemp outer = get_scratch();
+#include "lex.cpp"
 
-  U32 *outer_num = arena_push<U32>(outer.arena);
-  *outer_num = 999;
+enum Stage { LEX, PARSE, CODEGEN, ALL };
 
-  printf("Outer before inner: %u\n", *outer_num);
+auto main(int argc, char *argv[]) -> int {
+  scratch_init_and_equip();
+  auto arena = arena_alloc(GiB(4));
 
-  // Nested scratch arena
-  b(arena);
+  if (argc < 2) {
+    std::println("Wrong arguments {}", argc);
+    return 1;
+  }
+  std::vector<std::string> args(argv, argv + argc);
 
-  printf("Outer after inner: %u\n", *outer_num);
+  Stage stage = ALL;
+  const char *name = "";
+  for (auto &arg : args) {
+    if (arg == "--lex") {
+      assert(stage == ALL);
+      stage = LEX;
+    } else if (arg == "--parse") {
+      assert(stage == ALL);
+      stage = PARSE;
+    } else if (arg == "--codegen") {
+      assert(stage == ALL);
+      stage = CODEGEN;
+    } else {
+      name = arg.c_str();
+    }
+  }
 
-  release_scratch(outer);
-}
+  std::println("{} {}", name, (U8)stage);
 
-auto b(Arena &arena) -> void {
-  auto temp = get_scratch();
-  U32 *num = arena_push<U32>(&arena);
-  *num = 123;
+  switch (stage) {
+  case LEX:
+    return perform_lex(&arena, name);
+  default:
+    assert(false && "TODO");
+  }
 
-  char *msg = arena_push_array<char>(&arena, 6);
-  snprintf(msg, 6, "hello");
+  // // call gcc's preprocessor
+  // {
+  //   auto ta = get_scratch();
+  //   StringBuilder sb = sb_create(ta.arena, ta.arena->capacity);
+  //   sb_append(&sb, "gcc -E -P ");
 
-  printf("Number: %u\n", *num);
-  printf("Message: %s\n", msg);
+  //   sb_append(&sb, name);
+  //   sb_append(&sb, " -o ");
+  //   sb_append(&sb, name.substr(0, name.size() - 2));
+  //   sb_append(&sb, ".i");
+  //   // std::string_view pps_command = ;
+  //   std::println("{}", sb_cstr(&sb));
+  //   system(sb_cstr(&sb));
+  //   release_scratch(ta);
+  // }
 
-  release_scratch(temp);
-}
+  // // Compile the preprocessed file, stubbed, delete after
+  // // just delete it for now
+  // {
+  //   auto ta = get_scratch();
+  //   StringBuilder sb = sb_create(ta.arena, ta.arena->capacity);
+  //   sb_append(&sb, "gcc ");
 
-auto main() -> int {
-
-  auto x = arena_alloc(1024);
-  auto s = printf("%lu\n", arena_pos(&x));
-  auto n = arena_push<U32>(&x);
-  auto y = arena_pos(&x);
-  printf("%lu, %u\n", y, *n);
-  *n = 55;
-  printf("%u\n", *n);
-
-  a(x);
+  //   sb_append(&sb, name);
+  //   sb_append(&sb, " -o ");
+  //   sb_append(&sb, name.substr(0, name.size() - 2));
+  //   // std::string_view pps_command = ;
+  //   std::println("{}", sb_cstr(&sb));
+  //   system(sb_cstr(&sb));
+  //   release_scratch(ta);
+  // }
   return 0;
 }
