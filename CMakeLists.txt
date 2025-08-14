@@ -19,7 +19,7 @@ target_include_directories(base PUBLIC
 
 # ---- Main executable ----
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
 )
 add_executable(main_exec ${SRC_FILES})
 target_link_libraries(main_exec PRIVATE base)

@@ -16,7 +16,6 @@ Arena arena_alloc(U64 capacity) {
   U64 aligned_capacity = align_to_page_size(capacity);
 
 #ifndef NDEBUG
-  printf("IS DEBUG");
   // Debug: add extra guard page
   U64 total_size = aligned_capacity + ARENA_PAGE_SIZE;
   void *base = mmap(nullptr, total_size, PROT_READ | PROT_WRITE,
@@ -84,53 +83,49 @@ void arena_pop(Arena *arena, U64 amount) {
 
 void arena_reset(Arena *arena) { arena_pop_to(arena, 0); }
 
-// Per-thread scratch arenas
-thread_local struct {
-  Arena arenas[SCRATCH_ARENA_COUNT];
-  bool initialized = false;
-} tl_scratch = {};
+// Temporary arena scopes
+ArenaTemp temp_begin(Arena *arena) {
+  U64 pos = arena_pos(arena);
+  ArenaTemp temp = {arena, pos};
+  return temp;
+}
 
-static void scratch_init() {
-  if (!tl_scratch.initialized) {
-    for (U32 i = 0; i < SCRATCH_ARENA_COUNT; ++i) {
-      tl_scratch.arenas[i] = arena_alloc(SCRATCH_ARENA_SIZE);
+void temp_end(ArenaTemp temp) { arena_pop_to(temp.arena, temp.pos); }
+
+// Scratch arenas
+typedef struct {
+  Arena arenas[2];
+} Scratches;
+
+thread_local Scratches *tl_scratches = nullptr;
+
+void scratch_init_and_equip() {
+  if (!tl_scratches) {
+    tl_scratches = new Scratches{};
+    for (std::size_t i = 0; i < 2; ++i) {
+      tl_scratches->arenas[i] = arena_alloc(MiB(64));
     }
-    tl_scratch.initialized = true;
   }
 }
 
-ArenaTemp get_scratch(Arena **conflicts, U64 conflict_count) {
-  scratch_init();
-
-  for (U32 i = 0; i < SCRATCH_ARENA_COUNT; ++i) {
-    Arena *candidate = &tl_scratch.arenas[i];
-
-    bool is_conflict = false;
-    for (U64 j = 0; j < conflict_count; ++j) {
-      if (candidate == conflicts[j]) {
-        is_conflict = true;
+Arena *tl_get_scratch(Arena *conflicts[], std::size_t count) {
+  for (Arena &arena : tl_scratches->arenas) {
+    bool has_conflict = false;
+    for (std::size_t j = 0; j < count; ++j) {
+      if (&arena == conflicts[j]) {
+        has_conflict = true;
         break;
       }
     }
-
-    if (!is_conflict) {
-      return ArenaTemp{candidate, arena_pos(candidate)};
-    }
+    if (!has_conflict)
+      return &arena;
   }
-
-  assert(false && "No available scratch arena found!");
-  return ArenaTemp{nullptr, 0};
+  return nullptr; // no available scratch arena
 }
 
-ArenaTemp get_scratch() { return get_scratch(nullptr, 0); }
-
-ArenaTemp get_scratch(Arena *conflict1) {
-  Arena *conflicts[] = {conflict1};
-  return get_scratch(conflicts, 1);
+ArenaTemp scratch_begin(Arena **conflicts, U64 count) {
+  Arena *arena = tl_get_scratch(conflicts, count);
+  return temp_begin(arena);
 }
 
-void release_scratch(ArenaTemp temp) {
-  if (temp.arena) {
-    arena_pop_to(temp.arena, temp.pos);
-  }
-}
+void scratch_end(ArenaTemp temp) { temp_end(temp); }
