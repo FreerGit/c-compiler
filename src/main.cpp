@@ -42,6 +42,12 @@ auto main(int argc, char *argv[]) -> int {
   switch (stage) {
   case LEX: {
     LexResult result = perform_lex(&arena, name);
+    for (Size i = 0; i < result.token_count; ++i) {
+      Token t = result.tokens[i];
+      String8 s = token_kind_to_str8(t.kind);
+      printf("kind: %.*s, iden: '%.*s'\n", (int)s.size, s.str,
+             (int)t.source.size, t.source.str);
+    }
 
     return 0;
   };

@@ -40,6 +40,7 @@ enum TokenKind {
 
   // Keywords
   TK_KW_INT,
+  TK_KW_VOID,
   // TK_AND,
   // TK_CLASS,
   // TK_ELSE,
@@ -59,12 +60,17 @@ enum TokenKind {
 constexpr String8 token_kind_to_str8(TokenKind tk) {
   switch (tk) {
   case TK_LEFT_PAREN:
+    return str8_lit("TK_LEFT_PAREN");
   case TK_RIGHT_PAREN:
+    return str8_lit("TK_RIGHT_PAREN");
   case TK_LEFT_BRACE:
+    return str8_lit("TK_LEFT_BRACE");
   case TK_RIGHT_BRACE:
+    return str8_lit("TK_RIGHT_BRACE");
   case TK_COMMA:
   case TK_DOT:
   case TK_SEMICOLON:
+    return str8_lit("TK_SEMICOLON");
   case TK_MINUS:
   case TK_PLUS:
   case TK_SLASH:
@@ -78,11 +84,15 @@ constexpr String8 token_kind_to_str8(TokenKind tk) {
   case TK_LESS:
   case TK_LESS_EQUAL:
   case TK_IDENTIFIER:
+    return str8_lit("TK_IDENTIFIER");
   case TK_STRING:
   case TK_NUMBER:
   case TK_KW_INT:
     return str8_lit("TK_KW_INT");
+  case TK_KW_VOID:
+    return str8_lit("TK_KW_VOID");
   case TK_EOF:
+    return str8_lit("TK_EOF");
   case TK_ERROR:
   default:
     assert(false && "unreachable");
@@ -131,7 +141,7 @@ struct KeywordPair {
 };
 
 static KeywordPair keywords[] = {
-    {str8_lit("int"), TK_KW_INT},
+    {str8_lit("int"), TK_KW_INT}, {str8_lit("void"), TK_KW_VOID},
     // {str8_lit("main"), TK_CLASS},
     // {str8_lit("else"), TK_ELSE},   {str8_lit("false"), TK_FALSE},
     // {str8_lit("fun"), TK_FUN},     {str8_lit("for"), TK_FOR},
@@ -190,15 +200,35 @@ TokenResult next_token(Lexer &lexer) {
   if (current_char(lexer) == '\0')
     return {.token = {.kind = TK_EOF}};
 
+  printf("Current char: %c\n", current_char(lexer));
+  U8 c = current_char(lexer);
+
+  advance(lexer);
+
+  switch (c) {
+  case '(':
+    return {.token = {.kind = TK_LEFT_PAREN}};
+  case ')':
+    return {.token = {.kind = TK_RIGHT_PAREN}};
+  case '{':
+    return {.token = {.kind = TK_LEFT_BRACE}};
+  case '}':
+    return {.token = {.kind = TK_RIGHT_BRACE}};
+  case ';':
+    return {.token = {.kind = TK_SEMICOLON}};
+  default:
+    // assert(false);
+    if (char_is_alpha(c) || c == '_')
+      lexer.current--; // Back up once
+    return lex_identifier(lexer);
+  };
+  assert(false);
   printf("HERE:\n%.*s", (int)(lexer.input.size - lexer.current),
          (char *)&lexer.input.str[lexer.current]);
 
   TokenResult tr = lex_identifier(lexer);
 
-  String8 s = token_kind_to_str8(tr.token.kind);
-  printf("kind: %.*s\n", (int)s.size, s.str);
-
-  exit(1);
+  // exit(1);
 
   // if (char_is_digit(current_char(lexer), 10)) {
   // }
@@ -208,7 +238,7 @@ TokenResult next_token(Lexer &lexer) {
   //   }
   //   printf("%c\n", lexer.input.str[i]);
   // }
-  return {};
+  return tr;
 }
 
 auto perform_lex(Arena *arena, const char *file_name) -> LexResult {
@@ -228,11 +258,11 @@ auto perform_lex(Arena *arena, const char *file_name) -> LexResult {
   String8 str = str8(b, size);
   Lexer lexer = {.input = str, .current = 0, .line = 0};
 
-  Token *tokens_start = arena_push<Token>(arena);
-  Size token_count = 0;
+  // Token *tokens_start = arena_push<Token>(arena);
+  // Size token_count = 0;
 
-  LexResult lex_result = {.tokens = tokens_start,
-                          .token_count = token_count,
+  LexResult lex_result = {.tokens = nullptr,
+                          .token_count = 0,
                           .maybe_error = LEX_OK,
                           .error_msg = {}};
 
@@ -240,8 +270,11 @@ auto perform_lex(Arena *arena, const char *file_name) -> LexResult {
     TokenResult result = next_token(lexer);
 
     Token *t = arena_push<Token>(arena);
+    if (lex_result.tokens == nullptr)
+      lex_result.tokens = t;
+
     *t = result.token;
-    token_count++;
+    lex_result.token_count++;
 
     if (result.maybe_error != LEX_OK) {
       lex_result.maybe_error = result.maybe_error;
@@ -256,7 +289,5 @@ auto perform_lex(Arena *arena, const char *file_name) -> LexResult {
   scratch_end(s);
   f.close();
 
-  lex_result.tokens = tokens_start;
-  lex_result.token_count = token_count;
   return lex_result;
 }
