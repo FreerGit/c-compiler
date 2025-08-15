@@ -49,14 +49,6 @@ void arena_release(Arena *arena);
 // Core arena functions
 void *arena_push_size(Arena *arena, U64 size, U64 alignment = sizeof(void *));
 
-template <typename T> T *arena_push(Arena *arena);
-
-template <typename T> T *arena_push_array(Arena *arena, U64 count);
-
-template <typename T> T *arena_push_zero(Arena *arena);
-
-template <typename T> T *arena_push_array_zero(Arena *arena, U64 count);
-
 // Position and offset functions
 U64 arena_pos(Arena *arena);
 void arena_pop_to(Arena *arena, U64 pos);
@@ -72,7 +64,7 @@ template <typename T> T *arena_push(Arena *arena) {
   return static_cast<T *>(arena_push_size(arena, sizeof(T), alignof(T)));
 }
 
-template <typename T> T *arena_pusharena_push_array(Arena *arena, U64 count) {
+template <typename T> T *arena_push_array(Arena *arena, U64 count) {
   return static_cast<T *>(
       arena_push_size(arena, sizeof(T) * count, alignof(T)));
 }

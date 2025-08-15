@@ -1,4 +1,4 @@
-#pragma once
+#pragma oncep
 #include "arena.hpp"
 
 struct String8 {
@@ -13,7 +13,7 @@ struct String8List {
 };
 
 // Character classification & conversions
-bool char_is_space(U8 c);
+bool char_is_whitespace(U8 c);
 bool char_is_upper(U8 c);
 bool char_is_lower(U8 c);
 bool char_is_alpha(U8 c);

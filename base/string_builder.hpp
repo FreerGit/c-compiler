@@ -14,5 +14,5 @@ struct StringBuilder {
 StringBuilder sb_create(Arena *arena, U64 capacity);
 
 void sb_append(StringBuilder *sb, std::string_view sv);
-void sb_append_cstr(StringBuilder *sb, const char *cstr);
+void sb_append_cstr(StringBuilder *sb, U8 *cstr);
 const char *sb_cstr(StringBuilder *sb);

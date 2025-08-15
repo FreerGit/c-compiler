@@ -40,8 +40,11 @@ auto main(int argc, char *argv[]) -> int {
   std::println("{} {}", name, (U8)stage);
 
   switch (stage) {
-  case LEX:
-    return perform_lex(&arena, name);
+  case LEX: {
+    LexResult result = perform_lex(&arena, name);
+
+    return 0;
+  };
   default:
     assert(false && "TODO");
   }
