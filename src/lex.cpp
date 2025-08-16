@@ -1,4 +1,5 @@
 #include "arena.hpp"
+#include "string_builder.hpp"
 #include "strings.hpp"
 #include <cassert>
 #include <cstdio>
@@ -41,6 +42,7 @@ enum TokenKind {
   // Keywords
   TK_KW_INT,
   TK_KW_VOID,
+  TK_KW_RETURN,
   // TK_AND,
   // TK_CLASS,
   // TK_ELSE,
@@ -68,7 +70,9 @@ constexpr String8 token_kind_to_str8(TokenKind tk) {
   case TK_RIGHT_BRACE:
     return str8_lit("TK_RIGHT_BRACE");
   case TK_COMMA:
+    return str8_lit("TK_COMMA");
   case TK_DOT:
+    return str8_lit("TK_DOT");
   case TK_SEMICOLON:
     return str8_lit("TK_SEMICOLON");
   case TK_MINUS:
@@ -91,6 +95,8 @@ constexpr String8 token_kind_to_str8(TokenKind tk) {
     return str8_lit("TK_KW_INT");
   case TK_KW_VOID:
     return str8_lit("TK_KW_VOID");
+  case TK_KW_RETURN:
+    return str8_lit("TK_KW_RETURN");
   case TK_EOF:
     return str8_lit("TK_EOF");
   case TK_ERROR:
@@ -123,10 +129,8 @@ struct TokenResult {
 };
 
 struct LexResult {
-  Token *tokens;
+  TokenResult *tokens;
   Size token_count;
-  LexError maybe_error;
-  String8 error_msg;
 };
 
 struct Lexer {
@@ -141,7 +145,9 @@ struct KeywordPair {
 };
 
 static KeywordPair keywords[] = {
-    {str8_lit("int"), TK_KW_INT}, {str8_lit("void"), TK_KW_VOID},
+    {str8_lit("int"), TK_KW_INT},
+    {str8_lit("void"), TK_KW_VOID},
+    {str8_lit("return"), TK_KW_RETURN},
     // {str8_lit("main"), TK_CLASS},
     // {str8_lit("else"), TK_ELSE},   {str8_lit("false"), TK_FALSE},
     // {str8_lit("fun"), TK_FUN},     {str8_lit("for"), TK_FOR},
@@ -189,7 +195,27 @@ TokenResult lex_identifier(Lexer &lexer) {
   return {.token = token, .maybe_error = LEX_OK};
 }
 
-TokenResult next_token(Lexer &lexer) {
+TokenResult lex_number(Lexer &lexer) {
+  U64 start = lexer.current;
+  U64 end = start;
+
+  while (char_is_digit(current_char(lexer), 10)) {
+    advance(lexer);
+    ++end;
+  }
+
+  // TODO decimal part
+
+  Token t = {
+      .kind = TK_KW_INT,
+      .source = str8(&lexer.input.str[start], end - start),
+      .num_value = 0, // TODO actually parse the num
+  };
+  TokenResult result = {.token = t};
+  return result;
+}
+
+TokenResult next_token(Arena *arena, Lexer &lexer) {
   // Skip whitespaces
   while (char_is_whitespace(current_char(lexer))) {
     if (current_char(lexer) == '\n')
@@ -200,9 +226,7 @@ TokenResult next_token(Lexer &lexer) {
   if (current_char(lexer) == '\0')
     return {.token = {.kind = TK_EOF}};
 
-  printf("Current char: %c\n", current_char(lexer));
   U8 c = current_char(lexer);
-
   advance(lexer);
 
   switch (c) {
@@ -216,29 +240,51 @@ TokenResult next_token(Lexer &lexer) {
     return {.token = {.kind = TK_RIGHT_BRACE}};
   case ';':
     return {.token = {.kind = TK_SEMICOLON}};
+  case ',':
+    return {.token = {.kind = TK_COMMA}};
+  case '.':
+    return {.token = {.kind = TK_DOT}};
+  case '-':
+    return {.token = {.kind = TK_MINUS}};
+  case '+':
+    return {.token = {.kind = TK_PLUS}};
+  case '/':
+    // Is a comment, skip the line.
+    if (current_char(lexer) == '/') {
+      advance(lexer);
+      printf("HERE: %c\n", current_char(lexer));
+
+      while (current_char(lexer) != '\n' && current_char(lexer) != '\0') {
+        advance(lexer);
+      }
+
+      return next_token(arena, lexer);
+    }
+
+    return {.token = {.kind = TK_SLASH}};
+  case '*':
+    return {.token = {.kind = TK_STAR}};
+
   default:
-    // assert(false);
-    if (char_is_alpha(c) || c == '_')
+    if (char_is_digit(c, 10)) {
+      lexer.current--;
+      return lex_number(lexer);
+    }
+
+    if (char_is_alpha(c) || c == '_') {
       lexer.current--; // Back up once
-    return lex_identifier(lexer);
+      return lex_identifier(lexer);
+    }
+
+    StringBuilder sb = sb_create(arena, 1024);
+    sb_append(&sb, str8_lit("Unexpected Character! -> "));
+    sb_appendf(&sb, "\'%c\', found at %lu:%lu", c, (S64)lexer.line,
+               (S64)lexer.current);
+
+    String8 err_str = sb_to_str8(&sb);
+
+    return {.maybe_error = LEX_ERROR_INVALID_CHARACTER, .error_msg = err_str};
   };
-  assert(false);
-  printf("HERE:\n%.*s", (int)(lexer.input.size - lexer.current),
-         (char *)&lexer.input.str[lexer.current]);
-
-  TokenResult tr = lex_identifier(lexer);
-
-  // exit(1);
-
-  // if (char_is_digit(current_char(lexer), 10)) {
-  // }
-
-  // for (Size i = 0; i < lexer.input.size; ++i) {
-  //   if (char_is_whitespace(lexer.input.str[i])) {
-  //   }
-  //   printf("%c\n", lexer.input.str[i]);
-  // }
-  return tr;
 }
 
 auto perform_lex(Arena *arena, const char *file_name) -> LexResult {
@@ -251,8 +297,7 @@ auto perform_lex(Arena *arena, const char *file_name) -> LexResult {
 
   U8 *b = arena_push_array<U8>(s.arena, size + 1);
   if (!f.read(reinterpret_cast<char *>(b), size)) {
-    return {.maybe_error = LEX_ERROR_IO,
-            .error_msg = str8_lit("Couldn't read bytes from file")};
+    assert(false && "Couldn't read from file");
   }
 
   String8 str = str8(b, size);
@@ -261,26 +306,21 @@ auto perform_lex(Arena *arena, const char *file_name) -> LexResult {
   // Token *tokens_start = arena_push<Token>(arena);
   // Size token_count = 0;
 
-  LexResult lex_result = {.tokens = nullptr,
-                          .token_count = 0,
-                          .maybe_error = LEX_OK,
-                          .error_msg = {}};
+  LexResult lex_result = {
+      .tokens = nullptr,
+      .token_count = 0,
+  };
 
   while (true) {
-    TokenResult result = next_token(lexer);
 
-    Token *t = arena_push<Token>(arena);
+    TokenResult result = next_token(s.arena, lexer);
+
+    TokenResult *t = arena_push<TokenResult>(arena);
     if (lex_result.tokens == nullptr)
       lex_result.tokens = t;
 
-    *t = result.token;
+    *t = result;
     lex_result.token_count++;
-
-    if (result.maybe_error != LEX_OK) {
-      lex_result.maybe_error = result.maybe_error;
-      lex_result.error_msg = result.error_msg;
-      break;
-    }
 
     if (result.token.kind == TK_EOF)
       break;

@@ -1,4 +1,4 @@
-#pragma oncep
+#pragma once
 #include "arena.hpp"
 
 struct String8 {

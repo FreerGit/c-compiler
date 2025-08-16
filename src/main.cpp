@@ -41,13 +41,25 @@ auto main(int argc, char *argv[]) -> int {
 
   switch (stage) {
   case LEX: {
+    bool had_errors = false;
     LexResult result = perform_lex(&arena, name);
     for (Size i = 0; i < result.token_count; ++i) {
-      Token t = result.tokens[i];
-      String8 s = token_kind_to_str8(t.kind);
-      printf("kind: %.*s, iden: '%.*s'\n", (int)s.size, s.str,
-             (int)t.source.size, t.source.str);
+
+      TokenResult t = result.tokens[i];
+      if (t.maybe_error != LEX_OK) {
+        had_errors = true;
+
+        printf("ERR: %d - %.*s\n", t.maybe_error, (int)t.error_msg.size,
+               t.error_msg.str);
+      } else {
+        String8 s = token_kind_to_str8(t.token.kind);
+        printf("kind: %.*s, iden: '%.*s'\n", (int)s.size, s.str,
+               (int)t.token.source.size, t.token.source.str);
+      }
     }
+
+    if (had_errors)
+      exit(1);
 
     return 0;
   };
